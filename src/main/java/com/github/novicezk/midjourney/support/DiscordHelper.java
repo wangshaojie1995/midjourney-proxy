@@ -1,19 +1,14 @@
 package com.github.novicezk.midjourney.support;
 
-import cn.hutool.core.collection.ListUtil;
 import cn.hutool.core.text.CharSequenceUtil;
-import cn.hutool.core.util.PrimitiveArrayUtil;
 import com.github.novicezk.midjourney.ProxyProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 public class DiscordHelper {
 	private final ProxyProperties properties;
-	private static final char[] REGEX_SPECIAL_CHARS = new char[]{'.', '*', '+', '?', '^', '$', '[', ']', '|', '(', ')'};
 	/**
 	 * DISCORD_SERVER_URL.
 	 */
@@ -26,6 +21,10 @@ public class DiscordHelper {
 	 * DISCORD_WSS_URL.
 	 */
 	public static final String DISCORD_WSS_URL = "wss://gateway.discord.gg";
+	/**
+	 * DISCORD_UPLOAD_URL.
+	 */
+	public static final String DISCORD_UPLOAD_URL = "https://discord-attachments-uploads-prd.storage.googleapis.com";
 
 	public String getServer() {
 		if (CharSequenceUtil.isBlank(this.properties.getNgDiscord().getServer())) {
@@ -60,41 +59,44 @@ public class DiscordHelper {
 		return wssUrl;
 	}
 
-	public String generateFinalPrompt(String id, String prompt) {
-		String idPrefix = this.properties.getDiscord().getIdPrefix();
-		String idSuffix = this.properties.getDiscord().getIdSuffix();
-		return idPrefix + id + idSuffix + " " + prompt;
-	}
-
-	public String findTaskIdByFinalPrompt(String finalPrompt) {
-		String idPrefix = this.properties.getDiscord().getIdPrefix();
-		String idSuffix = this.properties.getDiscord().getIdSuffix();
-		return CharSequenceUtil.subBetween(finalPrompt, idPrefix, idSuffix);
-	}
-
-	public String convertContentRegex(String contentRegex) {
-		String prefix = convertRegex(this.properties.getDiscord().getIdPrefix());
-		String suffix = convertRegex(this.properties.getDiscord().getIdSuffix());
-		return contentRegex.replaceFirst("<", prefix).replaceFirst(">", suffix);
-	}
-
-	private static String convertRegex(String regex) {
-		char[] chars = regex.toCharArray();
-		Character[] characters = new Character[chars.length];
-		for (int i = 0; i < chars.length; i++) {
-			characters[i] = chars[i];
+	public String getResumeWss() {
+		if (CharSequenceUtil.isBlank(this.properties.getNgDiscord().getResumeWss())) {
+			return null;
 		}
-		List<Character> charList = ListUtil.toList(characters);
-		for (int i = 0; i < charList.size(); i++) {
-			if (PrimitiveArrayUtil.contains(REGEX_SPECIAL_CHARS, charList.get(i))) {
-				charList.add(i, '\\');
-				charList.add(i, '\\');
-				i += 2;
+		String resumeWss = this.properties.getNgDiscord().getResumeWss();
+		if (resumeWss.endsWith("/")) {
+			resumeWss = resumeWss.substring(0, resumeWss.length() - 1);
+		}
+		return resumeWss;
+	}
+
+	public String getDiscordUploadUrl(String uploadUrl) {
+		if (CharSequenceUtil.isBlank(this.properties.getNgDiscord().getUploadServer()) || CharSequenceUtil.isBlank(uploadUrl)) {
+			return uploadUrl;
+		}
+		String uploadServer = this.properties.getNgDiscord().getUploadServer();
+		if (uploadServer.endsWith("/")) {
+			uploadServer = uploadServer.substring(0, uploadServer.length() - 1);
+		}
+		return uploadUrl.replaceFirst(DISCORD_UPLOAD_URL, uploadServer);
+	}
+
+	public String getMessageHash(String imageUrl) {
+		if (CharSequenceUtil.isBlank(imageUrl)) {
+			return null;
+		}
+		if (CharSequenceUtil.endWith(imageUrl, "_grid_0.webp")) {
+			int hashStartIndex = imageUrl.lastIndexOf("/");
+			if (hashStartIndex < 0) {
+				return null;
 			}
+			return CharSequenceUtil.sub(imageUrl, hashStartIndex + 1, imageUrl.length() - "_grid_0.webp".length());
 		}
-		StringBuilder sb = new StringBuilder();
-		charList.forEach(sb::append);
-		return sb.toString();
+		int hashStartIndex = imageUrl.lastIndexOf("_");
+		if (hashStartIndex < 0) {
+			return null;
+		}
+		return CharSequenceUtil.subBefore(imageUrl.substring(hashStartIndex + 1), ".", true);
 	}
 
 }

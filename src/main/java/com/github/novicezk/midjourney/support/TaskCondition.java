@@ -23,9 +23,11 @@ public class TaskCondition implements Predicate<Task> {
 	private String promptEn;
 	private String description;
 
-	private String relatedTaskId;
+	private String finalPromptEn;
 	private String messageId;
+	private String messageHash;
 	private String progressMessageId;
+	private String nonce;
 
 	@Override
 	public boolean test(Task task) {
@@ -47,17 +49,23 @@ public class TaskCondition implements Predicate<Task> {
 		if (CharSequenceUtil.isNotBlank(this.promptEn) && !this.promptEn.equals(task.getPromptEn())) {
 			return false;
 		}
-		if (CharSequenceUtil.isNotBlank(this.description) && !this.description.equals(task.getDescription())) {
+		if (CharSequenceUtil.isNotBlank(this.description) && !CharSequenceUtil.contains(task.getDescription(), this.description)) {
 			return false;
 		}
 
-		if (CharSequenceUtil.isNotBlank(this.relatedTaskId) && !this.relatedTaskId.equals(task.getProperty(Constants.TASK_PROPERTY_RELATED_TASK_ID))) {
+		if (CharSequenceUtil.isNotBlank(this.finalPromptEn) && !this.finalPromptEn.equals(task.getProperty(Constants.TASK_PROPERTY_FINAL_PROMPT))) {
 			return false;
 		}
 		if (CharSequenceUtil.isNotBlank(this.messageId) && !this.messageId.equals(task.getProperty(Constants.TASK_PROPERTY_MESSAGE_ID))) {
 			return false;
 		}
+		if (CharSequenceUtil.isNotBlank(this.messageHash) && !this.messageHash.equals(task.getProperty(Constants.TASK_PROPERTY_MESSAGE_HASH))) {
+			return false;
+		}
 		if (CharSequenceUtil.isNotBlank(this.progressMessageId) && !this.progressMessageId.equals(task.getProperty(Constants.TASK_PROPERTY_PROGRESS_MESSAGE_ID))) {
+			return false;
+		}
+		if (CharSequenceUtil.isNotBlank(this.nonce) && !this.nonce.equals(task.getProperty(Constants.TASK_PROPERTY_NONCE))) {
 			return false;
 		}
 		return true;

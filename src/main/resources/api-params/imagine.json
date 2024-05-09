@@ -3,9 +3,10 @@
   "guild_id": "$guild_id",
   "channel_id": "$channel_id",
   "application_id": "936929561302675456",
-  "session_id": "9c4055428e13bcbf2248a6b36084c5f3",
+  "session_id": "$session_id",
+  "nonce": "$nonce",
   "data": {
-    "version": "1077969938624553050",
+    "version": "1237876415471554623",
     "id": "938956540159881230",
     "name": "imagine",
     "type": 1,

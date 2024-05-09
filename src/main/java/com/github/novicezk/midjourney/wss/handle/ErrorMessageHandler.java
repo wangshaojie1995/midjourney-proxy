@@ -1,31 +1,50 @@
 package com.github.novicezk.midjourney.wss.handle;
 
 import cn.hutool.core.text.CharSequenceUtil;
+import com.github.novicezk.midjourney.Constants;
 import com.github.novicezk.midjourney.enums.MessageType;
+import com.github.novicezk.midjourney.enums.TaskStatus;
+import com.github.novicezk.midjourney.loadbalancer.DiscordInstance;
 import com.github.novicezk.midjourney.support.Task;
 import com.github.novicezk.midjourney.support.TaskCondition;
 import lombok.extern.slf4j.Slf4j;
-import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.utils.data.DataArray;
 import net.dv8tion.jda.api.utils.data.DataObject;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Component
 public class ErrorMessageHandler extends MessageHandler {
 
 	@Override
-	public void handle(MessageType messageType, DataObject message) {
+	public int order() {
+		return 2;
+	}
+
+	@Override
+	public void handle(DiscordInstance instance, MessageType messageType, DataObject message) {
+		String content = getMessageContent(message);
+		if (CharSequenceUtil.startWith(content, "Failed")) {
+			// mj官方异常
+			message.put(Constants.MJ_MESSAGE_HANDLED, true);
+			String nonce = getMessageNonce(message);
+			Task task = instance.getRunningTaskByNonce(nonce);
+			if (task != null) {
+				task.fail(content);
+				task.awake();
+			}
+			return;
+		}
 		Optional<DataArray> embedsOptional = message.optArray("embeds");
 		if (embedsOptional.isEmpty() || embedsOptional.get().isEmpty()) {
 			return;
 		}
 		DataObject embed = embedsOptional.get().getObject(0);
 		String title = embed.getString("title", null);
-		if (CharSequenceUtil.isBlank(title) || CharSequenceUtil.startWith(title, "Your info - ")) {
-			// 排除正常信息.
+		if (CharSequenceUtil.isBlank(title)) {
 			return;
 		}
 		String description = embed.getString("description", null);
@@ -34,46 +53,51 @@ public class ErrorMessageHandler extends MessageHandler {
 		if (footer.isPresent()) {
 			footerText = footer.get().getString("text", "");
 		}
-		log.warn("检测到可能异常的信息: {}\n{}\nfooter: {}", title, description, footerText);
-		if (CharSequenceUtil.contains(description, "this job will start")) {
-			// mj队列中, 不认为是异常
-			return;
-		}
-		if (CharSequenceUtil.contains(description, "verify you're human")) {
-			String reason = "需要人工验证，请联系管理员";
-			this.taskQueueHelper.findRunningTask(new TaskCondition()).forEach(task -> {
-				task.fail(reason);
+		int color = embed.getInt("color", 0);
+		if (color == 16239475) {
+			log.warn("{} - MJ警告信息: {}\n{}\nfooter: {}", instance.getInstanceId(), title, description, footerText);
+		} else if (color == 16711680) {
+			message.put(Constants.MJ_MESSAGE_HANDLED, true);
+			log.error("{} - MJ异常信息: {}\n{}\nfooter: {}", instance.getInstanceId(), title, description, footerText);
+			String nonce = getMessageNonce(message);
+			Task task;
+			if (CharSequenceUtil.isNotBlank(nonce)) {
+				task = instance.getRunningTaskByNonce(nonce);
+			} else {
+				task = findTaskWhenError(instance, messageType, message);
+			}
+			if (task != null) {
+				task.fail("[" + title + "] " + description);
 				task.awake();
-			});
-			return;
-		}
-		Task targetTask = null;
-		if (CharSequenceUtil.startWith(footerText, "/imagine ")) {
-			String finalPrompt = CharSequenceUtil.subAfter(footerText, "/imagine ", false);
-			String taskId = this.discordHelper.findTaskIdByFinalPrompt(finalPrompt);
-			targetTask = this.taskQueueHelper.getRunningTask(taskId);
-		} else if (CharSequenceUtil.startWith(footerText, "/describe ")) {
-			String imageUrl = CharSequenceUtil.subAfter(footerText, "/describe ", false);
-			int hashStartIndex = imageUrl.lastIndexOf("/");
-			String taskId = CharSequenceUtil.subBefore(imageUrl.substring(hashStartIndex + 1), ".", true);
-			targetTask = this.taskQueueHelper.getRunningTask(taskId);
-		}
-		if (targetTask == null) {
-			return;
-		}
-		String reason;
-		if (CharSequenceUtil.contains(description, "against our community standards")) {
-			reason = "可能包含违规信息";
+			}
 		} else {
-			reason = description;
+			if ("link".equals(embed.getString("type", "")) || CharSequenceUtil.isBlank(description)) {
+				return;
+			}
+			// 兼容 Invalid link! \ Could not complete 等错误
+			Task task = findTaskWhenError(instance, messageType, message);
+			if (task != null) {
+				message.put(Constants.MJ_MESSAGE_HANDLED, true);
+				log.warn("{} - MJ可能的异常信息: {}\n{}\nfooter: {}", instance.getInstanceId(), title, description, footerText);
+				task.fail("[" + title + "] " + description);
+				task.awake();
+			}
 		}
-		targetTask.fail(reason);
-		targetTask.awake();
 	}
 
-	@Override
-	public void handle(MessageType messageType, Message message) {
-		// bot-wss 获取不到错误
+	private Task findTaskWhenError(DiscordInstance instance, MessageType messageType, DataObject message) {
+		String progressMessageId = null;
+		if (MessageType.CREATE.equals(messageType)) {
+			progressMessageId = getReferenceMessageId(message);
+		} else if (MessageType.UPDATE.equals(messageType)) {
+			progressMessageId = message.getString("id");
+		}
+		if (CharSequenceUtil.isBlank(progressMessageId)) {
+			return null;
+		}
+		TaskCondition condition = new TaskCondition().setStatusSet(Set.of(TaskStatus.IN_PROGRESS, TaskStatus.SUBMITTED))
+				.setProgressMessageId(progressMessageId);
+		return instance.findRunningTask(condition).findFirst().orElse(null);
 	}
 
 }

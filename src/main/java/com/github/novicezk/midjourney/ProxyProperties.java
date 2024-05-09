@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Component
@@ -16,9 +18,17 @@ public class ProxyProperties {
 	 */
 	private final TaskStore taskStore = new TaskStore();
 	/**
-	 * discord配置.
+	 * discord账号选择规则.
 	 */
-	private final DiscordConfig discord = new DiscordConfig();
+	private String accountChooseRule = "BestWaitIdleRule";
+	/**
+	 * discord单账号配置.
+	 */
+	private final DiscordAccountConfig discord = new DiscordAccountConfig();
+	/**
+	 * discord账号池配置.
+	 */
+	private final List<DiscordAccountConfig> accounts = new ArrayList<>();
 	/**
 	 * 代理配置.
 	 */
@@ -27,10 +37,6 @@ public class ProxyProperties {
 	 * 反代配置.
 	 */
 	private final NgDiscordConfig ngDiscord = new NgDiscordConfig();
-	/**
-	 * 任务队列配置.
-	 */
-	private final TaskQueueConfig queue = new TaskQueueConfig();
 	/**
 	 * 百度翻译配置.
 	 */
@@ -51,41 +57,45 @@ public class ProxyProperties {
 	 * 任务状态变更回调地址.
 	 */
 	private String notifyHook;
+	/**
+	 * 通知回调线程池大小.
+	 */
+	private int notifyPoolSize = 10;
 
 	@Data
-	public static class DiscordConfig {
+	public static class DiscordAccountConfig {
 		/**
-		 * 你的服务器id.
+		 * 服务器ID.
 		 */
 		private String guildId;
 		/**
-		 * 你的频道id.
+		 * 频道ID.
 		 */
 		private String channelId;
 		/**
-		 * 你的登录token.
+		 * 用户Token.
 		 */
 		private String userToken;
 		/**
-		 * 是否使用user_token连接wss，默认启用.
+		 * 用户UserAgent.
 		 */
-		private boolean userWss = true;
+		private String userAgent = Constants.DEFAULT_DISCORD_USER_AGENT;
 		/**
-		 * 调用discord接口、连接wss时的user-agent.
+		 * 是否可用.
 		 */
-		private String userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36";
+		private boolean enable = true;
 		/**
-		 * 你的机器人token.
+		 * 并发数.
 		 */
-		private String botToken;
+		private int coreSize = 3;
 		/**
-		 * prompt拼接ID的前缀，可使用多个字符，不要使用 '\' 字符.
+		 * 等待队列长度.
 		 */
-		private String idPrefix = "[";
+		private int queueSize = 10;
 		/**
-		 * prompt拼接ID的后缀，可使用多个字符，不要使用 '\' 字符.
+		 * 任务超时时间(分钟).
 		 */
-		private String idSuffix = "]";
+		private int timeoutMinutes = 5;
 	}
 
 	@Data
@@ -102,6 +112,10 @@ public class ProxyProperties {
 
 	@Data
 	public static class OpenaiConfig {
+		/**
+		 * 自定义gpt的api-url.
+		 */
+		private String gptApiUrl;
 		/**
 		 * gpt的api-key.
 		 */
@@ -173,6 +187,14 @@ public class ProxyProperties {
 		 * wss://gateway.discord.gg 反代.
 		 */
 		private String wss;
+		/**
+		 * wss://gateway-us-east1-b.discord.gg 反代.
+		 */
+		private String resumeWss;
+		/**
+		 * https://discord-attachments-uploads-prd.storage.googleapis.com 反代.
+		 */
+		private String uploadServer;
 	}
 
 	@Data
